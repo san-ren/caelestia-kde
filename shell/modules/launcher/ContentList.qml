@@ -29,8 +29,19 @@ Item {
     readonly property bool showWindowSwitcher: search.text.startsWith(`${GlobalConfig.launcher.actionPrefix}windows `)
     readonly property bool showKeybinds: search.text.startsWith(`${GlobalConfig.launcher.actionPrefix}keybinds `)
     readonly property bool showAnimations: search.text.startsWith(`${GlobalConfig.launcher.actionPrefix}animations `)
+    readonly property bool showClipboard: search.text.startsWith(`${GlobalConfig.launcher.actionPrefix}clipboard `)
+    readonly property bool showEmoji: search.text.startsWith(`${GlobalConfig.launcher.actionPrefix}emoji `)
+    readonly property bool showActions: {
+        const prefix = GlobalConfig.launcher.actionPrefix;
+        if (!search.text.startsWith(prefix))
+            return false;
+        for (const m of ["calc", "scheme", "variant", "emoji", "clipboard", "windows", "wallpaper", "keybinds", "animations"])
+            if (search.text.startsWith(`${prefix}${m} `))
+                return false;
+        return true;
+    }
     readonly property bool showAppsBrowser: root.state === "apps" && !search.text && Config.launcher.showBrowseOnEmpty
-    readonly property var currentList: showWallpapers ? wallpaperList.item : (showWindowSwitcher ? windowSwitcherList.item : (showAnimations ? animationsList.item : (showKeybinds ? keybindsList.item : (showAppsBrowser ? browser.item : appList.item))))
+    readonly property var currentList: showWallpapers ? wallpaperList.item : (showWindowSwitcher ? windowSwitcherList.item : (showAnimations ? animationsList.item : (showKeybinds ? keybindsList.item : (showClipboard ? clipboardList.item : (showEmoji ? emojiList.item : (showActions ? actionsList.item : (showAppsBrowser ? browser.item : appList.item)))))))
 
     readonly property var wallpaperTabs: {
         const res = [];
@@ -66,7 +77,7 @@ Item {
             PropertyChanges {
                 target: root
                 implicitWidth: root.showAppsBrowser ? browser.implicitWidth : root.Tokens.sizes.launcher.itemWidth
-                implicitHeight: root.showAppsBrowser ? Math.min(root.maxHeight, Math.max(root.Tokens.sizes.launcher.browseMinHeight, Math.min(browser.implicitHeight, root.Tokens.sizes.launcher.browseHeight))) : Math.min(root.maxHeight, appList.implicitHeight > 0 ? appList.implicitHeight : empty.implicitHeight)
+                implicitHeight: root.showAppsBrowser ? Math.min(root.maxHeight, Math.max(root.Tokens.sizes.launcher.browseMinHeight, Math.min(browser.implicitHeight, root.Tokens.sizes.launcher.browseHeight))) : Math.min(root.maxHeight, (root.currentList?.implicitHeight ?? 0) > 0 ? root.currentList.implicitHeight : empty.implicitHeight)
             }
         },
         State {
@@ -113,6 +124,11 @@ Item {
 
     onActiveFocusChanged: {
         wallpaperSettings.mediaFilter = Wallpapers.currentMediaFilter;
+    }
+
+    onShowClipboardChanged: {
+        if (showClipboard)
+            Clipboard.reload();
     }
 
     onShowWallpapersChanged: {
@@ -171,13 +187,80 @@ Item {
     Loader {
         id: appList
 
-        active: root.state === "apps" && !root.showAppsBrowser
+        active: root.state === "apps" && !root.showAppsBrowser && !root.showClipboard && !root.showEmoji && !root.showActions
 
         anchors.fill: parent
 
         sourceComponent: AppList {
             search: root.search
             visibilities: root.visibilities
+        }
+    }
+
+    // The clipboard, emoji and command views are kept as their own resident lists while
+    // the launcher is open, so switching between them only changes their opacity instead
+    // of rebuilding a delegate list. They load asynchronously so building them does not
+    // block the frame that opens the launcher.
+    Loader {
+        id: clipboardList
+
+        asynchronous: true
+        active: root.state === "apps"
+
+        anchors.top: parent.top
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: parent.width
+        height: item ? item.implicitHeight : 0
+        visible: true
+        opacity: root.showClipboard ? 1 : 0
+        enabled: root.showClipboard
+
+        sourceComponent: ClipboardList {
+            search: root.search
+            visibilities: root.visibilities
+            maxHeight: root.maxHeight
+        }
+    }
+
+    Loader {
+        id: emojiList
+
+        asynchronous: true
+        active: root.state === "apps"
+
+        anchors.top: parent.top
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: parent.width
+        height: item ? item.implicitHeight : 0
+        visible: true
+        opacity: root.showEmoji ? 1 : 0
+        enabled: root.showEmoji
+
+        sourceComponent: EmojiList {
+            search: root.search
+            visibilities: root.visibilities
+            maxHeight: root.maxHeight
+        }
+    }
+
+    Loader {
+        id: actionsList
+
+        asynchronous: true
+        active: root.state === "apps"
+
+        anchors.top: parent.top
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: parent.width
+        height: item ? item.implicitHeight : 0
+        visible: true
+        opacity: root.showActions ? 1 : 0
+        enabled: root.showActions
+
+        sourceComponent: ActionsList {
+            search: root.search
+            visibilities: root.visibilities
+            maxHeight: root.maxHeight
         }
     }
 
@@ -433,7 +516,7 @@ Item {
     Row {
         id: empty
 
-        readonly property bool cliphistMissing: root.currentList?.state === "clipboard" && !Clipboard.available
+        readonly property bool cliphistMissing: root.showClipboard && !Clipboard.available
 
         opacity: (!root.showAppsBrowser && root.currentList?.count === 0) ? 1 : 0
         scale: (!root.showAppsBrowser && root.currentList?.count === 0) ? 1 : 0.5
