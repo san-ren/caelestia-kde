@@ -18,6 +18,8 @@ Item {
     required property bool selected
     required property var browser
 
+    property bool draggable: false
+
     readonly property bool isFavourite: root.modelData && Strings.testRegexList(GlobalConfig.launcher.favouriteApps, root.modelData.id)
     readonly property bool favouriteByRegex: root.modelData && !((GlobalConfig.launcher.favouriteApps ?? []).includes(root.modelData.id)) && root.isFavourite
     readonly property bool simple: Config.launcher.browseLayout === LauncherBrowseLayout.Simple
@@ -39,6 +41,8 @@ Item {
     readonly property int lineHeight: Math.max(1, Math.round(nameMetrics.height))
     readonly property int labelHeight: root.lineHeight * root.labelLines
     readonly property int baseIconSize: Math.min(Math.round(root.implicitWidth * 0.5), Math.max(16, root.implicitHeight - root.labelHeight - Tokens.spacing.extraSmall * 2))
+
+    signal dragRequested(real x, real y)
 
     implicitWidth: Tokens.sizes.launcher.browseTileWidth
     implicitHeight: Tokens.sizes.launcher.browseTileHeight
@@ -70,11 +74,15 @@ Item {
         anchors.fill: parent
         radius: Tokens.rounding.large
         acceptedButtons: Qt.LeftButton | Qt.RightButton
+        dragEnabled: root.draggable
         onContainsMouseChanged: {
             if (containsMouse)
                 root.browser.selectTile(root.index);
         }
+        onDragRequested: (x, y) => root.dragRequested(x, y)
         onClicked: mouse => {
+            if (tileArea.dragSent)
+                return;
             if (mouse.button === Qt.RightButton) {
                 root.browser.openContextMenu(root.modelData, root);
             } else {

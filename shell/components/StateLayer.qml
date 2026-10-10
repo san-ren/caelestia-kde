@@ -11,6 +11,10 @@ MouseArea {
     property bool showHoverBackground: true
     property bool manualPressOverride
     property bool manualHoverOverride
+    // Reports a press-and-move as a drag instead of swallowing it; owners that
+    // do not connect dragRequested see no change.
+    property bool dragEnabled: false
+    property bool dragSent: false
     readonly property alias rect: base
 
     property bool shapeMorph
@@ -36,6 +40,8 @@ MouseArea {
     }
     property real endRadiusAtPress
 
+    signal dragRequested(real x, real y)
+
     function distSq(x: real, y: real): real {
         return (pressX - x) ** 2 + (pressY - y) ** 2;
     }
@@ -59,7 +65,21 @@ MouseArea {
     cursorShape: disabled ? undefined : Qt.PointingHandCursor
     hoverEnabled: true
 
-    onPressed: e => press(e.x, e.y)
+    onPressed: e => {
+        press(e.x, e.y);
+        dragSent = false;
+    }
+
+    onPositionChanged: e => {
+        if (!dragEnabled || dragSent || !pressed)
+            return;
+        const dx = e.x - pressX;
+        const dy = e.y - pressY;
+        if (dx * dx + dy * dy >= Qt.styleHints.startDragDistance * Qt.styleHints.startDragDistance) {
+            dragSent = true;
+            dragRequested(e.x, e.y);
+        }
+    }
 
     onPressedChanged: {
         if (!(pressed || manualPressOverride) && !rippleAnim.running && circle.opacity > 0)

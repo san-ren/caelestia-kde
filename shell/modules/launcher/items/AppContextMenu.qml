@@ -33,6 +33,8 @@ Controls.Menu {
     readonly property bool isPinnedToDock: app ? Strings.testRegexList(GlobalConfig.bar.dock.pinnedApps, app.id) : false
     readonly property bool isHidden: app ? Strings.testRegexList(GlobalConfig.launcher.hiddenApps, app.id) : false
     property bool isPinnedToDesktop: false
+    property string folderId: ""
+    property var folderBrowser: null
 
     function openFor(targetApp: DesktopEntry, targetItem: Item): void {
         app = targetApp;
@@ -52,6 +54,28 @@ Controls.Menu {
     thisSideY: _flipY ? Controls.Menu.Bottom : Controls.Menu.Top
 
     items: [
+        Controls.MenuItem {
+            visible: root.folderId !== ""
+            text: qsTr("Move out of folder")
+            icon: "north_east"
+            onClicked: {
+                if (!root.app?.id || !root.folderId)
+                    return;
+                LauncherFavourites.moveOut(root.folderId, root.app.id, LauncherFavourites.entries.length);
+                if (root.folderBrowser && !LauncherFavourites.folderById(root.folderId))
+                    root.folderBrowser.closeFolder();
+            }
+        },
+        Controls.MenuItem {
+            visible: root.folderId !== ""
+            text: qsTr("Remove from favourites")
+            icon: "star_border"
+            onClicked: {
+                if (!root.app?.id)
+                    return;
+                GlobalConfig.launcher.favouriteApps = (GlobalConfig.launcher.favouriteApps ?? []).filter(x => x !== root.app.id);
+            }
+        },
         Controls.MenuItem {
             text: root.isPinnedToDock ? qsTr("Unpin from dock") : qsTr("Pin to dock")
             icon: "push_pin"

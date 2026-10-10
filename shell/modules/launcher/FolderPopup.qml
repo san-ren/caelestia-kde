@@ -1,0 +1,358 @@
+pragma ComponentBehavior: Bound
+
+import QtQuick
+import Quickshell
+import Caelestia.Config
+import qs.components
+import qs.components.controls
+import qs.components.effects
+import qs.services
+import qs.modules.launcher.items
+
+Item {
+    id: root
+
+    required property var browser
+    property bool open: false
+    property string folderKey: ""
+    property rect anchorRect: Qt.rect(0, 0, 0, 0)
+
+    readonly property var folder: root.browser.favourites.find(f => f.key === root.shownId) ?? null
+    readonly property var members: root.folder?.members ?? []
+    readonly property int cellWidth: Tokens.sizes.launcher.browseTileWidth
+    readonly property int cellHeight: Tokens.sizes.launcher.browseTileHeight
+    readonly property int columns: Math.max(1, Math.min(4, root.members.length <= 4 ? root.members.length : Math.ceil(Math.sqrt(root.members.length))))
+    readonly property int rows: Math.max(1, Math.ceil(root.members.length / root.columns))
+    readonly property var displayMembers: {
+        if (!root.memberPreview)
+            return root.members;
+        const byId = {};
+        for (const m of root.members)
+            byId[m.id] = m;
+        const out = [];
+        for (const id of root.memberPreview) {
+            if (byId[id]) {
+                out.push(byId[id]);
+                delete byId[id];
+            }
+        }
+        for (const id in byId)
+            out.push(byId[id]);
+        return out;
+    }
+
+    property string shownId: ""
+    property real progress: root.open ? 1 : 0
+    property int memberIndex: -1
+    property var memberPreview: null
+    property var memberDragKeys: []
+    property string memberDragAnchor: ""
+    property bool dropOutHover: false
+
+    signal closed()
+
+    function selectTile(index: int): void {
+        root.memberIndex = index;
+    }
+
+    function launch(app: var): void {
+        root.browser.launch(app);
+    }
+
+    function openContextMenu(app: var, item: Item): void {
+        memberMenu.openFor(app, item);
+    }
+
+    function refresh(): void {
+        root.browser.refresh();
+    }
+
+    function beginMemberDrag(item: var, x: real, y: real): void {
+        if (root.memberDragKeys.length > 0 || !item)
+            return;
+        const id = item.appId;
+        root.memberDragKeys = [id];
+        root.memberDragAnchor = id;
+        item.grabToImage(result => {
+            if (root.memberDragAnchor !== id)
+                return;
+            memberDragSource.Drag.mimeData = { "application/x-caelestia-launcher-folder-members": id };
+            memberDragSource.Drag.imageSource = result.url;
+            memberDragSource.Drag.hotSpot = Qt.point(x, y);
+            memberDragSource.Drag.active = true;
+        });
+    }
+
+    function isInternal(drag: var): bool {
+        return drag.source === memberDragSource && root.memberDragKeys.length > 0;
+    }
+
+    function memberDragMove(tile: var, drag: var): void {
+        if (!root.isInternal(drag))
+            return;
+        drag.accept(Qt.MoveAction);
+        const fromId = root.memberDragAnchor;
+        const toId = tile.appId;
+        if (fromId === toId)
+            return;
+        const ids = root.members.map(m => m.id);
+        const from = ids.indexOf(fromId);
+        const to = ids.indexOf(toId);
+        if (from === -1 || to === -1)
+            return;
+        const before = drag.x < tile.width / 2;
+        ids.splice(from, 1);
+        let insert = to + (before ? 0 : 1);
+        if (from < insert)
+            insert--;
+        ids.splice(insert, 0, fromId);
+        root.memberPreview = ids;
+    }
+
+    function memberDrop(tile: var, drop: var): void {
+        if (!root.isInternal(drop))
+            return;
+        drop.accept(Qt.MoveAction);
+        if (root.memberPreview)
+            LauncherFavourites.setMemberOrder(root.shownId, root.memberPreview);
+        root.endMemberDrag();
+    }
+
+    function moveOut(): void {
+        LauncherFavourites.moveOut(root.shownId, root.memberDragAnchor, LauncherFavourites.entries.length);
+        const stillFolder = LauncherFavourites.folderById(root.shownId);
+        root.endMemberDrag();
+        if (!stillFolder)
+            root.browser.closeFolder();
+    }
+
+    function endMemberDrag(): void {
+        memberDragSource.Drag.active = false;
+        root.memberDragKeys = [];
+        root.memberDragAnchor = "";
+        root.memberPreview = null;
+        root.dropOutHover = false;
+    }
+
+    visible: root.progress > 0
+
+    onOpenChanged: {
+        if (root.open) {
+            root.shownId = root.folderKey;
+            root.memberIndex = root.members.length > 0 ? 0 : -1;
+        }
+    }
+
+    onFolderChanged: {
+        if (root.open && root.shownId && !root.folder)
+            root.browser.closeFolder();
+    }
+
+    onProgressChanged: {
+        if (!root.open && root.progress <= 0) {
+            root.memberPreview = null;
+            root.memberIndex = -1;
+            root.closed();
+        }
+    }
+
+    Behavior on progress {
+        Anim {
+            type: root.open ? Anim.FastSpatial : Anim.FastEffects
+        }
+    }
+
+    MouseArea {
+        anchors.fill: parent
+        enabled: root.open
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        onPressed: root.browser.closeFolder()
+    }
+
+    DropArea {
+        anchors.fill: parent
+        onEntered: drag => {
+            if (!root.isInternal(drag))
+                return;
+            drag.accept(Qt.MoveAction);
+            root.dropOutHover = true;
+        }
+        onExited: root.dropOutHover = false
+        onDropped: drop => {
+            if (!root.isInternal(drop))
+                return;
+            drop.accept(Qt.MoveAction);
+            root.moveOut();
+        }
+    }
+
+    Elevation {
+        id: panel
+
+        readonly property real pad: Tokens.padding.large
+        readonly property real wantX: root.anchorRect.x + root.anchorRect.width / 2 - width / 2
+        readonly property real wantY: root.anchorRect.y + root.anchorRect.height / 2 - height / 2
+
+        x: Math.max(Tokens.padding.large, Math.min(root.width - width - Tokens.padding.large, wantX))
+        y: Math.max(Tokens.padding.large, Math.min(root.height - height - Tokens.padding.large, wantY))
+        width: root.columns * root.cellWidth + pad * 2
+        height: Math.min(root.height * 0.8, title.height + Tokens.spacing.medium + root.rows * root.cellHeight + pad * 2)
+        radius: Tokens.rounding.large
+        level: 3
+        opacity: root.progress * (root.dropOutHover ? 0.4 : 1)
+        transform: Scale {
+            origin.x: root.anchorRect.x + root.anchorRect.width / 2 - panel.x
+            origin.y: root.anchorRect.y + root.anchorRect.height / 2 - panel.y
+            xScale: 0.4 + 0.6 * root.progress
+            yScale: 0.4 + 0.6 * root.progress
+        }
+
+        Behavior on opacity {
+            Anim {
+                type: Anim.FastEffects
+            }
+        }
+
+        StyledRect {
+            anchors.fill: parent
+            radius: parent.radius
+            color: GlobalConfig.appearance.pitchBlack ? "#000000" : Qt.alpha(Colours.palette.m3surfaceContainer, 0.96)
+            clip: true
+
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                onPressed: root.endMemberDrag()
+            }
+
+            DropArea {
+                anchors.fill: parent
+                onDropped: drop => {
+                    if (!root.isInternal(drop))
+                        return;
+                    drop.accept(Qt.MoveAction);
+                    root.endMemberDrag();
+                }
+            }
+
+            FolderTitle {
+                id: title
+
+                anchors.top: parent.top
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.topMargin: panel.pad
+                width: Math.min(implicitWidth, parent.width - panel.pad * 2 - 40)
+                text: root.folder?.name ?? ""
+                onRenameRequested: title.startRename(root.folder?.name ?? "")
+                onRenameCommitted: text => LauncherFavourites.renameFolder(root.shownId, text)
+                onRenameCancelled: {}
+            }
+
+            IconButton {
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.topMargin: panel.pad - Tokens.padding.small
+                anchors.rightMargin: panel.pad - Tokens.padding.small
+                type: IconButton.Text
+                icon: "folder_off"
+                onClicked: {
+                    LauncherFavourites.ungroup(root.shownId);
+                    root.browser.closeFolder();
+                }
+            }
+
+            Flickable {
+                id: flick
+
+                anchors.top: title.bottom
+                anchors.topMargin: Tokens.spacing.medium
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.leftMargin: panel.pad
+                anchors.rightMargin: panel.pad
+                anchors.bottomMargin: panel.pad
+                contentWidth: grid.width
+                contentHeight: grid.height
+                interactive: contentHeight > height
+                clip: true
+
+                Item {
+                    id: grid
+
+                    width: root.columns * root.cellWidth
+                    height: root.rows * root.cellHeight
+
+                    Repeater {
+                        model: root.members
+
+                        MemberTile {}
+                    }
+                }
+            }
+        }
+    }
+
+    AppContextMenu {
+        id: memberMenu
+
+        folderId: root.shownId
+        folderBrowser: root.browser
+        visibilities: root.browser.visibilities ?? null
+    }
+
+    Item {
+        id: memberDragSource
+
+        width: 1
+        height: 1
+        Drag.dragType: Drag.Automatic
+        Drag.supportedActions: Qt.MoveAction
+        Drag.proposedAction: Qt.MoveAction
+        Drag.onDragFinished: root.endMemberDrag()
+    }
+
+    component MemberTile: Item {
+        id: tile
+
+        required property var modelData
+        required property int index
+
+        readonly property string appId: tile.modelData?.id ?? ""
+        readonly property int slot: {
+            const idx = root.displayMembers.findIndex(m => m.id === tile.appId);
+            return idx === -1 ? tile.index : idx;
+        }
+
+        width: root.cellWidth
+        height: root.cellHeight
+        x: (slot % root.columns) * root.cellWidth
+        y: Math.floor(slot / root.columns) * root.cellHeight
+        z: root.memberDragKeys.indexOf(tile.appId) !== -1 ? 2 : 1
+
+        Behavior on x {
+            Anim {}
+        }
+
+        Behavior on y {
+            Anim {}
+        }
+
+        AppTile {
+            anchors.fill: parent
+            modelData: tile.modelData
+            index: tile.index
+            selected: root.memberIndex === tile.index
+            browser: root
+            draggable: true
+            onDragRequested: (x, y) => root.beginMemberDrag(tile, x, y)
+        }
+
+        DropArea {
+            anchors.fill: parent
+            onEntered: drag => root.memberDragMove(tile, drag)
+            onPositionChanged: drag => root.memberDragMove(tile, drag)
+            onDropped: drop => root.memberDrop(tile, drop)
+        }
+    }
+}

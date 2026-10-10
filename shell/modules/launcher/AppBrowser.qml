@@ -13,6 +13,7 @@ Item {
     readonly property var browser: loader.item
     readonly property var currentItem: root.browser?.currentItem ?? null
     readonly property int count: root.browser?.count ?? 0
+    readonly property bool folderOpen: root.browser?.folderOpen ?? false
 
     function refresh(): void {
         root.browser?.refresh();
@@ -48,6 +49,10 @@ Item {
 
     function activateCurrent(): void {
         root.browser?.activateCurrent();
+    }
+
+    function closeFolder(): void {
+        root.browser?.closeFolder();
     }
 
     implicitWidth: root.browser?.implicitWidth ?? 0

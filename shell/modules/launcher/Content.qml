@@ -248,6 +248,10 @@ Item {
             }
 
             Keys.onEscapePressed: {
+                if (list.showAppsBrowser && list.currentList?.folderOpen) {
+                    list.currentList.closeFolder();
+                    return;
+                }
                 Windows.isSwitching = false;
                 Kwin.clearHighlight();
                 root.visibilities.launcher = false;
