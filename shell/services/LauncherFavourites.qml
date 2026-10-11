@@ -11,7 +11,6 @@ Singleton {
     readonly property string layoutPath: `${Paths.data}/launcher_favourites.json`
 
     property bool loaded: false
-    // Ordered top-level favourites: { kind: "app", id } or { kind: "folder", id, name, apps }.
     property var entries: []
 
     signal changed()
@@ -78,11 +77,8 @@ Singleton {
         scheduleSave();
     }
 
-    // Keeps the layout in step with the config: drops apps that are no longer
-    // favourites, appends newly favourited ones and dissolves folders left with
-    // a single member.
-    function reconcile(favIds: var): void {
-        const ids = favIds ?? [];
+    function reconcile(appIds: var): void {
+        const ids = appIds ?? [];
         const favSet = new Set(ids);
         const seen = new Set();
         const next = [];
@@ -126,6 +122,9 @@ Singleton {
     }
 
     function makeFolder(sourceKeys: var, targetKey: string): void {
+        const isAppKey = k => k.slice(0, 2) === "a/";
+        if (!isAppKey(targetKey) || !sourceKeys.every(isAppKey))
+            return;
         const sourceIds = sourceKeys.map(k => k.slice(2));
         const targetId = targetKey.slice(2);
         if (sourceIds.indexOf(targetId) !== -1)
@@ -136,7 +135,7 @@ Singleton {
         const removed = e => sourceKeys.indexOf(keyOf(e)) !== -1 || keyOf(e) === targetKey;
         const next = entries.filter(e => !removed(e));
         const apps = sourceIds.filter(id => entries.some(e => e.kind === "app" && e.id === id));
-        apps.push(targetId);
+        apps.unshift(targetId);
         let insert = 0;
         for (let i = 0; i < targetIndex; i++)
             if (!removed(entries[i]))

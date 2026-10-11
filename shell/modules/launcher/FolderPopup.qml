@@ -4,7 +4,7 @@ import QtQuick
 import Quickshell
 import Caelestia.Config
 import qs.components
-import qs.components.controls
+import qs.components.controls as Controls
 import qs.components.effects
 import qs.services
 import qs.modules.launcher.items
@@ -18,6 +18,7 @@ Item {
     property rect anchorRect: Qt.rect(0, 0, 0, 0)
 
     readonly property var folder: root.browser.favourites.find(f => f.key === root.shownId) ?? null
+    readonly property string folderId: root.shownId.slice(2)
     readonly property var members: root.folder?.members ?? []
     readonly property int cellWidth: Tokens.sizes.launcher.browseTileWidth
     readonly property int cellHeight: Tokens.sizes.launcher.browseTileHeight
@@ -48,6 +49,7 @@ Item {
     property var memberDragKeys: []
     property string memberDragAnchor: ""
     property bool dropOutHover: false
+    property bool pendingRename: false
 
     signal closed()
 
@@ -63,6 +65,10 @@ Item {
         memberMenu.openFor(app, item);
     }
 
+    function openFolderMenu(id: string, anchorItem: Item): void {
+        folderMenu.openFor(id, anchorItem);
+    }
+
     function refresh(): void {
         root.browser.refresh();
     }
@@ -73,6 +79,7 @@ Item {
         const id = item.appId;
         root.memberDragKeys = [id];
         root.memberDragAnchor = id;
+        memberDragWatchdog.restart();
         item.grabToImage(result => {
             if (root.memberDragAnchor !== id)
                 return;
@@ -114,19 +121,20 @@ Item {
             return;
         drop.accept(Qt.MoveAction);
         if (root.memberPreview)
-            LauncherFavourites.setMemberOrder(root.shownId, root.memberPreview);
+            LauncherFavourites.setMemberOrder(root.folderId, root.memberPreview);
         root.endMemberDrag();
     }
 
     function moveOut(): void {
-        LauncherFavourites.moveOut(root.shownId, root.memberDragAnchor, LauncherFavourites.entries.length);
-        const stillFolder = LauncherFavourites.folderById(root.shownId);
+        LauncherFavourites.moveOut(root.folderId, root.memberDragAnchor, LauncherFavourites.entries.length);
+        const stillFolder = LauncherFavourites.folderById(root.folderId);
         root.endMemberDrag();
         if (!stillFolder)
             root.browser.closeFolder();
     }
 
     function endMemberDrag(): void {
+        memberDragWatchdog.stop();
         memberDragSource.Drag.active = false;
         root.memberDragKeys = [];
         root.memberDragAnchor = "";
@@ -149,9 +157,14 @@ Item {
     }
 
     onProgressChanged: {
+        if (root.pendingRename && root.progress > 0) {
+            root.pendingRename = false;
+            title.startRename(root.folder?.name ?? "");
+        }
         if (!root.open && root.progress <= 0) {
             root.memberPreview = null;
             root.memberIndex = -1;
+            root.pendingRename = false;
             root.closed();
         }
     }
@@ -244,19 +257,19 @@ Item {
                 width: Math.min(implicitWidth, parent.width - panel.pad * 2 - 40)
                 text: root.folder?.name ?? ""
                 onRenameRequested: title.startRename(root.folder?.name ?? "")
-                onRenameCommitted: text => LauncherFavourites.renameFolder(root.shownId, text)
+                onRenameCommitted: text => LauncherFavourites.renameFolder(root.folderId, text)
                 onRenameCancelled: {}
             }
 
-            IconButton {
+            Controls.IconButton {
                 anchors.top: parent.top
                 anchors.right: parent.right
                 anchors.topMargin: panel.pad - Tokens.padding.small
                 anchors.rightMargin: panel.pad - Tokens.padding.small
-                type: IconButton.Text
+                type: Controls.IconButton.Text
                 icon: "folder_off"
                 onClicked: {
-                    LauncherFavourites.ungroup(root.shownId);
+                    LauncherFavourites.ungroup(root.folderId);
                     root.browser.closeFolder();
                 }
             }
@@ -296,9 +309,52 @@ Item {
     AppContextMenu {
         id: memberMenu
 
-        folderId: root.shownId
+        attachTo: root
+        folderId: root.folderId
         folderBrowser: root.browser
         visibilities: root.browser.visibilities ?? null
+    }
+
+    Controls.Menu {
+        id: folderMenu
+
+        property string folderId: ""
+
+        function openFor(id: string, targetItem: Item): void {
+            folderId = id;
+            attachTo = targetItem;
+            expanded = true;
+        }
+
+        attachTo: root
+
+        attachSideX: Controls.Menu.Left
+        attachSideY: Controls.Menu.Top
+        thisSideX: Controls.Menu.Left
+        thisSideY: Controls.Menu.Bottom
+
+        items: [
+            Controls.MenuItem {
+                text: qsTr("Rename")
+                icon: "edit"
+                onClicked: {
+                    if (!LauncherFavourites.folderById(folderMenu.folderId))
+                        return;
+                    root.pendingRename = true;
+                    root.browser.openFolder(LauncherFavourites.folderKey(folderMenu.folderId), folderMenu.attachTo);
+                }
+            },
+            Controls.MenuItem {
+                text: qsTr("Ungroup")
+                icon: "folder_off"
+                onClicked: {
+                    if (!folderMenu.folderId)
+                        return;
+                    LauncherFavourites.ungroup(folderMenu.folderId);
+                    root.browser.closeFolder();
+                }
+            }
+        ]
     }
 
     Item {
@@ -310,6 +366,16 @@ Item {
         Drag.supportedActions: Qt.MoveAction
         Drag.proposedAction: Qt.MoveAction
         Drag.onDragFinished: root.endMemberDrag()
+    }
+
+    Timer {
+        id: memberDragWatchdog
+
+        interval: 500
+        onTriggered: {
+            if (root.memberDragKeys.length > 0 && !memberDragSource.Drag.active)
+                root.endMemberDrag();
+        }
     }
 
     component MemberTile: Item {

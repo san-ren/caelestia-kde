@@ -11,8 +11,6 @@ MouseArea {
     property bool showHoverBackground: true
     property bool manualPressOverride
     property bool manualHoverOverride
-    // Reports a press-and-move as a drag instead of swallowing it; owners that
-    // do not connect dragRequested see no change.
     property bool dragEnabled: false
     property bool dragSent: false
     readonly property alias rect: base

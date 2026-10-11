@@ -83,7 +83,7 @@ Item {
             draggable: true
             onDragRequested: (x, y) => root.dragRequested(root.key, x, y)
             onActivated: root.browser.openFolder(root.key, root)
-            onContextMenuRequested: (x, y) => root.browser.openFolder(root.key, root)
+            onContextMenuRequested: (x, y) => root.browser.openFolderContextMenu(root.key, root)
         }
     }
 

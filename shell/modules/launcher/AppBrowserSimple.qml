@@ -37,7 +37,6 @@ Item {
     property string dragAnchor: ""
     property var previewKeys: null
     property string mergeKey: ""
-    property bool dragImageReady: false
     property string dragImageKey: ""
 
     property string folderKey: ""
@@ -100,11 +99,11 @@ Item {
         const isVisible = a => a && !Strings.testRegexList(hiddenIds, a.id);
         const isFav = a => isVisible(a) && Strings.testRegexList(favIds, a.id);
 
-        LauncherFavourites.reconcile(favIds);
-
         const byId = {};
         for (const a of alpha)
             byId[a.id] = a;
+
+        LauncherFavourites.reconcile(alpha.filter(isFav).map(a => a.id));
 
         const list = [];
         for (const e of LauncherFavourites.entries) {
@@ -206,6 +205,13 @@ Item {
         root.folderOpen = true;
     }
 
+    function openFolderContextMenu(key: string, targetItem: Item): void {
+        const id = key.slice(2);
+        if (!LauncherFavourites.folderById(id))
+            return;
+        folderPopup.openFolderMenu(id, targetItem);
+    }
+
     function closeFolder(): void {
         root.folderOpen = false;
     }
@@ -217,10 +223,10 @@ Item {
     function beginDrag(key: string, item: Item, x: real, y: real): void {
         if (root.dragKeys.length > 0 || !item)
             return;
-        root.dragImageReady = false;
         root.dragImageKey = key;
         root.dragKeys = [key];
         root.dragAnchor = key;
+        dragWatchdog.restart();
         item.grabToImage(result => {
             if (root.dragImageKey !== key)
                 return;
@@ -228,7 +234,6 @@ Item {
             dragSource.Drag.imageSource = result.url;
             dragSource.Drag.hotSpot = Qt.point(x, y);
             dragSource.Drag.active = true;
-            root.dragImageReady = true;
         });
     }
 
@@ -297,6 +302,7 @@ Item {
     }
 
     function endDrag(): void {
+        dragWatchdog.stop();
         dragSource.Drag.active = false;
         root.dragKeys = [];
         root.dragAnchor = "";
@@ -318,6 +324,7 @@ Item {
         root.currentIndex = 0;
         grid.cancelFlick();
         grid.contentY = grid.originY;
+        root.closeFolder();
     }
 
     implicitWidth: Math.min(Tokens.sizes.launcher.browseWidth, root.maxWidth)
@@ -490,6 +497,16 @@ Item {
         Drag.supportedActions: Qt.MoveAction
         Drag.proposedAction: Qt.MoveAction
         Drag.onDragFinished: root.endDrag()
+    }
+
+    Timer {
+        id: dragWatchdog
+
+        interval: 500
+        onTriggered: {
+            if (root.dragKeys.length > 0 && !dragSource.Drag.active)
+                root.endDrag();
+        }
     }
 
     FolderPopup {
