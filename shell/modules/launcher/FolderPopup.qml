@@ -12,12 +12,12 @@ import qs.modules.launcher.items
 Item {
     id: root
 
-    required property var browser
+    required property var controller
     property bool open: false
     property string folderKey: ""
     property rect anchorRect: Qt.rect(0, 0, 0, 0)
 
-    readonly property var folder: root.browser.favourites.find(f => f.key === root.shownId) ?? null
+    readonly property var folder: root.controller.entries.find(f => f.key === root.shownId) ?? null
     readonly property string folderId: root.shownId.slice(2)
     readonly property var members: root.folder?.members ?? []
     readonly property int cellWidth: Tokens.sizes.launcher.browseTileWidth
@@ -58,7 +58,7 @@ Item {
     }
 
     function launch(app: var): void {
-        root.browser.launch(app);
+        root.controller.launchRequested(app);
     }
 
     function openContextMenu(app: var, item: Item): void {
@@ -70,7 +70,7 @@ Item {
     }
 
     function refresh(): void {
-        root.browser.refresh();
+        root.controller.refresh();
     }
 
     function beginMemberDrag(item: var, x: real, y: real): void {
@@ -130,7 +130,7 @@ Item {
         const stillFolder = LauncherFavourites.folderById(root.folderId);
         root.endMemberDrag();
         if (!stillFolder)
-            root.browser.closeFolder();
+            root.controller.closeFolder();
     }
 
     function endMemberDrag(): void {
@@ -153,7 +153,7 @@ Item {
 
     onFolderChanged: {
         if (root.open && root.shownId && !root.folder)
-            root.browser.closeFolder();
+            root.controller.closeFolder();
     }
 
     onProgressChanged: {
@@ -179,7 +179,7 @@ Item {
         anchors.fill: parent
         enabled: root.open
         acceptedButtons: Qt.LeftButton | Qt.RightButton
-        onPressed: root.browser.closeFolder()
+        onPressed: root.controller.closeFolder()
     }
 
     DropArea {
@@ -270,7 +270,7 @@ Item {
                 icon: "folder_off"
                 onClicked: {
                     LauncherFavourites.ungroup(root.folderId);
-                    root.browser.closeFolder();
+                    root.controller.closeFolder();
                 }
             }
 
@@ -311,8 +311,8 @@ Item {
 
         attachTo: root
         folderId: root.folderId
-        folderBrowser: root.browser
-        visibilities: root.browser.visibilities ?? null
+        folderBrowser: root.controller
+        visibilities: root.controller.visibilities ?? null
     }
 
     Controls.Menu {
@@ -341,7 +341,7 @@ Item {
                     if (!LauncherFavourites.folderById(folderMenu.folderId))
                         return;
                     root.pendingRename = true;
-                    root.browser.openFolder(LauncherFavourites.folderKey(folderMenu.folderId), folderMenu.attachTo);
+                    root.controller.openFolder(LauncherFavourites.folderKey(folderMenu.folderId), folderMenu.attachTo);
                 }
             },
             Controls.MenuItem {
@@ -351,7 +351,7 @@ Item {
                     if (!folderMenu.folderId)
                         return;
                     LauncherFavourites.ungroup(folderMenu.folderId);
-                    root.browser.closeFolder();
+                    root.controller.closeFolder();
                 }
             }
         ]

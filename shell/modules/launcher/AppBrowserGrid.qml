@@ -19,17 +19,21 @@ Item {
     property string currentCategory: "favorites"
     property bool sidebarFocused: false
     property var visibleCategories: []
+    property int favouriteIndex: 0
 
-    readonly property var currentItem: grid.currentItem
-    readonly property int count: grid.count
+    readonly property bool showingFavourites: root.currentCategory === "favorites"
+    readonly property var currentItem: root.showingFavourites ? favouriteGrid.itemAt(root.favouriteIndex) : grid.currentItem
+    readonly property int count: root.showingFavourites ? favourites.displayEntries.length : grid.count
+    readonly property bool folderOpen: favourites.folderOpen
 
     readonly property int padding: Tokens.padding.large
     readonly property int sidebarWidth: Tokens.sizes.launcher.browseSidebarWidth
     readonly property int tileCellWidth: Tokens.sizes.launcher.browseTileWidth + Tokens.spacing.medium
     readonly property int tileCellHeight: Tokens.sizes.launcher.browseTileHeight + Tokens.spacing.medium
 
-    readonly property int columns: Math.max(1, Math.floor((root.implicitWidth - root.sidebarWidth - root.padding * 2 - Tokens.spacing.medium) / root.tileCellWidth))
-    readonly property int rows: Math.ceil(root.count / root.columns)
+    readonly property int columns: root.showingFavourites ? favourites.columns : Math.max(1, Math.floor((root.implicitWidth - root.sidebarWidth - root.padding * 2 - Tokens.spacing.medium) / root.tileCellWidth))
+    readonly property int rows: root.showingFavourites ? favourites.rows : Math.ceil(root.count / root.columns)
+    readonly property int rowHeight: root.showingFavourites ? favourites.cellHeight : root.tileCellHeight
 
     function sameItems(a: var, b: var): bool {
         if (a === b)
@@ -45,11 +49,14 @@ Item {
     function refresh(): void {
         const all = Apps.allApps();
         const nextCategories = Categories.visibleCategories(all);
-        const nextApps = Categories.appsFor(root.currentCategory, all);
+        favourites.refresh();
         if (!sameItems(root.visibleCategories, nextCategories))
             root.visibleCategories = nextCategories;
+        const nextApps = root.showingFavourites ? [] : Categories.appsFor(root.currentCategory, all);
         if (!sameItems(gridModel.values, nextApps))
             gridModel.values = nextApps;
+        if (root.favouriteIndex >= favourites.displayEntries.length)
+            root.favouriteIndex = Math.max(0, favourites.displayEntries.length - 1);
     }
 
     function launch(app): void {
@@ -58,7 +65,10 @@ Item {
     }
 
     function selectTile(index: int): void {
-        grid.currentIndex = index;
+        if (root.showingFavourites)
+            root.favouriteIndex = index;
+        else
+            grid.currentIndex = index;
     }
 
     function selectCategory(id: string): void {
@@ -67,12 +77,27 @@ Item {
         const idx = root.visibleCategories.findIndex(d => d.id === id);
         sidebar.currentIndex = Math.max(0, idx);
         root.refresh();
+        root.favouriteIndex = 0;
+        favouriteView.contentY = 0;
         grid.currentIndex = grid.count > 0 ? 0 : -1;
+    }
+
+    function moveFavourite(delta: int): void {
+        if (root.count === 0)
+            return;
+        root.favouriteIndex = Math.max(0, Math.min(root.count - 1, root.favouriteIndex + delta));
+        const top = Math.floor(root.favouriteIndex / favourites.columns) * favourites.cellHeight;
+        if (top < favouriteView.contentY)
+            favouriteView.contentY = top;
+        else if (top + favourites.cellHeight > favouriteView.contentY + favouriteView.height)
+            favouriteView.contentY = top + favourites.cellHeight - favouriteView.height;
     }
 
     function incrementCurrentIndex(): void {
         if (root.sidebarFocused)
             sidebar.incrementCurrentIndex();
+        else if (root.showingFavourites)
+            root.moveFavourite(favourites.columns);
         else
             grid.moveCurrentIndexDown();
     }
@@ -80,6 +105,8 @@ Item {
     function decrementCurrentIndex(): void {
         if (root.sidebarFocused)
             sidebar.decrementCurrentIndex();
+        else if (root.showingFavourites)
+            root.moveFavourite(-favourites.columns);
         else
             grid.moveCurrentIndexUp();
     }
@@ -87,6 +114,13 @@ Item {
     function moveLeft(): void {
         if (root.sidebarFocused)
             return;
+        if (root.showingFavourites) {
+            if (root.favouriteIndex % favourites.columns === 0)
+                root.sidebarFocused = true;
+            else
+                root.moveFavourite(-1);
+            return;
+        }
         const before = grid.currentIndex;
         grid.moveCurrentIndexLeft();
         if (grid.currentIndex === before)
@@ -96,6 +130,8 @@ Item {
     function moveRight(): void {
         if (root.sidebarFocused)
             root.selectCategory(sidebar.currentItem?.modelData?.id ?? "favorites");
+        else if (root.showingFavourites)
+            root.moveFavourite(1);
         else
             grid.moveCurrentIndexRight();
     }
@@ -108,9 +144,21 @@ Item {
     }
 
     function activateCurrent(): void {
-        if (root.sidebarFocused)
+        if (root.sidebarFocused) {
             root.selectCategory(sidebar.currentItem?.modelData?.id ?? "favorites");
-        else if (grid.currentItem?.modelData)
+            return;
+        }
+        if (root.showingFavourites) {
+            const entry = favourites.displayEntries[root.favouriteIndex];
+            if (entry) {
+                if (entry.kind === "folder")
+                    favourites.openFolder(entry.key, favouriteGrid.itemAt(root.favouriteIndex));
+                else
+                    root.launch(entry.entry);
+                return;
+            }
+        }
+        if (grid.currentItem?.modelData)
             root.launch(grid.currentItem.modelData);
     }
 
@@ -118,8 +166,12 @@ Item {
         contextMenu.openFor(app, targetItem);
     }
 
+    function closeFolder(): void {
+        favourites.closeFolder();
+    }
+
     implicitWidth: Math.min(Tokens.sizes.launcher.browseWidth, root.maxWidth)
-    implicitHeight: root.padding * 2 + (root.count === 0 ? root.tileCellHeight * 2 : root.rows * root.tileCellHeight)
+    implicitHeight: root.padding * 2 + (root.count === 0 ? root.rowHeight * 2 : root.rows * root.rowHeight)
 
     Component.onCompleted: {
         root.refresh();
@@ -145,6 +197,14 @@ Item {
         }
 
         target: GlobalConfig.launcher
+    }
+
+    Connections {
+        function onChanged(): void {
+            root.refresh();
+        }
+
+        target: LauncherFavourites
     }
 
     AppContextMenu {
@@ -185,6 +245,8 @@ Item {
         }
 
         Item {
+            id: gridArea
+
             Layout.fillWidth: true
             Layout.fillHeight: true
 
@@ -192,6 +254,7 @@ Item {
                 id: grid
 
                 anchors.fill: parent
+                visible: !root.showingFavourites
 
                 model: ScriptModel {
                     id: gridModel
@@ -218,10 +281,30 @@ Item {
                 }
             }
 
+            Flickable {
+                id: favouriteView
+
+                anchors.fill: parent
+                visible: root.showingFavourites
+                contentWidth: width
+                contentHeight: favouriteGrid.implicitHeight
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                interactive: favourites.dragKeys.length === 0
+
+                FavouritesGrid {
+                    id: favouriteGrid
+
+                    controller: favourites
+                    browser: root
+                    currentIndex: root.favouriteIndex
+                }
+            }
+
             Column {
                 anchors.centerIn: parent
                 spacing: Tokens.spacing.medium
-                visible: grid.count === 0
+                visible: root.count === 0
 
                 MaterialIcon {
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -238,5 +321,29 @@ Item {
                 }
             }
         }
+    }
+
+    DropArea {
+        anchors.fill: parent
+        z: -1
+        onEntered: drag => {
+            if (favourites.isInternal(drag))
+                favourites.dragBackground();
+        }
+        onPositionChanged: drag => {
+            if (favourites.isInternal(drag))
+                favourites.dragBackground();
+        }
+    }
+
+    FavouritesController {
+        id: favourites
+
+        anchors.fill: parent
+        areaWidth: gridArea.width
+        currentIndex: root.favouriteIndex
+        stretchTiles: false
+        visibilities: root.visibilities
+        onLaunchRequested: app => root.launch(app)
     }
 }
