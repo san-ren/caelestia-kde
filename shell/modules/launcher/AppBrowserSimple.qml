@@ -43,7 +43,7 @@ Item {
         if (index < 0)
             return null;
         if (index < favourites.displayEntries.length)
-            return grid.headerItem ? favGrid.itemAt(index) : null;
+            return grid.headerItem ? grid.headerItem.favouriteAt(index) : null;
         return grid.itemAtIndex(index - favourites.displayEntries.length) ?? null;
     }
 
@@ -194,6 +194,10 @@ Item {
 
         header: Item {
             id: headerItem
+
+            function favouriteAt(index: int): Item {
+                return favGrid.itemAt(index);
+            }
 
             width: grid.width
             height: headerColumn.implicitHeight
