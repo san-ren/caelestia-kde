@@ -24,8 +24,8 @@ Item {
     readonly property int tileHeight: Tokens.sizes.launcher.browseTileHeight
     readonly property int cellWidth: root.tileWidth + Tokens.spacing.medium
     readonly property int cellHeight: root.tileHeight + Tokens.spacing.medium
-    readonly property int columns: Math.max(3, Math.min(5, Math.ceil(Math.sqrt(root.members.length))))
-    readonly property int rows: Math.max(1, Math.ceil(root.members.length / root.columns))
+    readonly property int columns: 5
+    readonly property int rows: Math.max(3, Math.ceil(root.members.length / root.columns))
     readonly property var displayMembers: {
         if (!root.memberPreview)
             return root.members;
@@ -172,9 +172,9 @@ Item {
     }
 
     Behavior on progress {
-        Anim {
-            type: root.open ? Anim.FastSpatial : Anim.FastEffects
-        }
+        enabled: !root.controller.visibilities?.skipLauncherAnim
+
+        Anim {}
     }
 
     MouseArea {
@@ -206,18 +206,29 @@ Item {
 
         readonly property real pad: Tokens.padding.large
 
+        readonly property real targetX: Math.round(Math.max(pad, Math.min(root.width - width - pad, (root.width - width) / 2)))
+        readonly property real targetY: Math.round(Math.max(pad, Math.min(root.height - height - pad, (root.height - height) / 2)))
+
         width: root.columns * root.cellWidth + pad * 2
-        height: Math.min(root.height * 0.8, title.height + Tokens.spacing.medium + root.rows * root.cellHeight + pad * 2)
-        x: Math.round(Math.max(pad, Math.min(root.width - width - pad, (root.width - width) / 2)))
-        y: Math.round(Math.max(pad, Math.min(root.height - height - pad, (root.height - height) / 2)))
+        height: Math.min(root.height - pad * 2, title.height + Tokens.spacing.medium + root.rows * root.cellHeight + pad * 2)
+        x: targetX
+        y: targetY
         radius: Tokens.rounding.large
         level: 3
         opacity: root.progress * (root.dropOutHover ? 0.4 : 1)
         transform: Scale {
-            origin.x: root.anchorRect.x + root.anchorRect.width / 2 - panel.x
-            origin.y: root.anchorRect.y + root.anchorRect.height / 2 - panel.y
-            xScale: 0.4 + 0.6 * root.progress
-            yScale: 0.4 + 0.6 * root.progress
+            origin.x: width / 2
+            origin.y: height / 2
+            xScale: Math.max(0, root.progress)
+            yScale: Math.max(0, root.progress)
+        }
+
+        Behavior on width {
+            Anim {}
+        }
+
+        Behavior on height {
+            Anim {}
         }
 
         Behavior on opacity {
@@ -390,12 +401,10 @@ Item {
 
         readonly property int row: Math.floor(tile.slot / root.columns)
         readonly property int col: tile.slot % root.columns
-        readonly property int rowCount: Math.max(0, Math.min(root.columns, root.displayMembers.length - tile.row * root.columns))
-        readonly property real rowOffset: (root.columns - tile.rowCount) * root.cellWidth / 2
 
         width: root.tileWidth
         height: root.tileHeight
-        x: tile.rowOffset + tile.col * root.cellWidth
+        x: tile.col * root.cellWidth
         y: tile.row * root.cellHeight
         z: root.memberDragKeys.indexOf(tile.appId) !== -1 ? 2 : 1
 
