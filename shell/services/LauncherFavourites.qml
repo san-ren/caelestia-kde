@@ -191,6 +191,21 @@ Singleton {
         setEntries(next);
     }
 
+    function addToFolder(appKey: string, folderKey: string): void {
+        if (appKey.slice(0, 2) !== "a/" || folderKey.slice(0, 2) !== "g/")
+            return;
+        const id = appKey.slice(2);
+        const folderId = folderKey.slice(2);
+        const folder = folderById(folderId);
+        const from = entries.findIndex(e => e.kind === "app" && e.id === id);
+        if (!folder || from === -1 || folder.apps.indexOf(id) !== -1)
+            return;
+        const next = entries.filter((e, i) => i !== from);
+        const index = next.findIndex(e => e.kind === "folder" && e.id === folderId);
+        next[index] = Object.assign({}, next[index], { apps: next[index].apps.concat(id) });
+        setEntries(next);
+    }
+
     function scheduleSave(): void {
         if (loaded)
             saveTimer.restart();

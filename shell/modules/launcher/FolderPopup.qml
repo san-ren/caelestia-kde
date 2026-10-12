@@ -20,9 +20,11 @@ Item {
     readonly property var folder: root.controller.entries.find(f => f.key === root.shownId) ?? null
     readonly property string folderId: root.shownId.slice(2)
     readonly property var members: root.folder?.members ?? []
-    readonly property int cellWidth: Tokens.sizes.launcher.browseTileWidth
-    readonly property int cellHeight: Tokens.sizes.launcher.browseTileHeight
-    readonly property int columns: Math.max(1, Math.min(4, root.members.length <= 4 ? root.members.length : Math.ceil(Math.sqrt(root.members.length))))
+    readonly property int tileWidth: Tokens.sizes.launcher.browseTileWidth
+    readonly property int tileHeight: Tokens.sizes.launcher.browseTileHeight
+    readonly property int cellWidth: root.tileWidth + Tokens.spacing.medium
+    readonly property int cellHeight: root.tileHeight + Tokens.spacing.medium
+    readonly property int columns: Math.max(3, Math.min(5, Math.ceil(Math.sqrt(root.members.length))))
     readonly property int rows: Math.max(1, Math.ceil(root.members.length / root.columns))
     readonly property var displayMembers: {
         if (!root.memberPreview)
@@ -203,13 +205,11 @@ Item {
         id: panel
 
         readonly property real pad: Tokens.padding.large
-        readonly property real wantX: root.anchorRect.x + root.anchorRect.width / 2 - width / 2
-        readonly property real wantY: root.anchorRect.y + root.anchorRect.height / 2 - height / 2
 
-        x: Math.max(Tokens.padding.large, Math.min(root.width - width - Tokens.padding.large, wantX))
-        y: Math.max(Tokens.padding.large, Math.min(root.height - height - Tokens.padding.large, wantY))
         width: root.columns * root.cellWidth + pad * 2
         height: Math.min(root.height * 0.8, title.height + Tokens.spacing.medium + root.rows * root.cellHeight + pad * 2)
+        x: Math.round(Math.max(pad, Math.min(root.width - width - pad, (root.width - width) / 2)))
+        y: Math.round(Math.max(pad, Math.min(root.height - height - pad, (root.height - height) / 2)))
         radius: Tokens.rounding.large
         level: 3
         opacity: root.progress * (root.dropOutHover ? 0.4 : 1)
@@ -310,8 +310,6 @@ Item {
         id: memberMenu
 
         attachTo: root
-        folderId: root.folderId
-        folderBrowser: root.controller
         visibilities: root.controller.visibilities ?? null
     }
 
@@ -390,10 +388,15 @@ Item {
             return idx === -1 ? tile.index : idx;
         }
 
-        width: root.cellWidth
-        height: root.cellHeight
-        x: (slot % root.columns) * root.cellWidth
-        y: Math.floor(slot / root.columns) * root.cellHeight
+        readonly property int row: Math.floor(tile.slot / root.columns)
+        readonly property int col: tile.slot % root.columns
+        readonly property int rowCount: Math.max(0, Math.min(root.columns, root.displayMembers.length - tile.row * root.columns))
+        readonly property real rowOffset: (root.columns - tile.rowCount) * root.cellWidth / 2
+
+        width: root.tileWidth
+        height: root.tileHeight
+        x: tile.rowOffset + tile.col * root.cellWidth
+        y: tile.row * root.cellHeight
         z: root.memberDragKeys.indexOf(tile.appId) !== -1 ? 2 : 1
 
         Behavior on x {

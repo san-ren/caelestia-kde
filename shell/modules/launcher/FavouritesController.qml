@@ -161,9 +161,8 @@ Item {
             return;
         const fromEntry = root.entries.find(f => f.key === fromKey);
         const toEntry = root.entries.find(f => f.key === toKey);
-        if (fromEntry && toEntry && fromEntry.kind === "app" && toEntry.kind === "app" && wrapper.overIcon(drag.x, drag.y)) {
+        if (fromEntry && toEntry && fromEntry.kind === "app" && wrapper.overIcon(drag.x, drag.y)) {
             root.mergeKey = toKey;
-            root.previewKeys = null;
             return;
         }
         root.mergeKey = "";
@@ -204,8 +203,13 @@ Item {
         if (root.mergeKey === toKey) {
             const fromEntry = root.entries.find(f => f.key === fromKey);
             const toEntry = root.entries.find(f => f.key === toKey);
-            if (fromEntry && toEntry && fromEntry.kind === "app" && toEntry.kind === "app") {
+            if (fromEntry && fromEntry.kind === "app" && toEntry && toEntry.kind === "app") {
                 LauncherFavourites.makeFolder([fromKey], toKey);
+                root.endDrag();
+                return;
+            }
+            if (fromEntry && fromEntry.kind === "app" && toEntry && toEntry.kind === "folder") {
+                LauncherFavourites.addToFolder(fromKey, toKey);
                 root.endDrag();
                 return;
             }
@@ -218,6 +222,7 @@ Item {
     function endDrag(): void {
         dragWatchdog.stop();
         dragSource.Drag.active = false;
+        root.dragImageKey = "";
         root.dragKeys = [];
         root.dragAnchor = "";
         root.previewKeys = null;
