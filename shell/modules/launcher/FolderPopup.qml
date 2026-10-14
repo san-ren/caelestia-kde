@@ -45,7 +45,10 @@ Item {
     }
 
     property string shownId: ""
-    property real progress: root.open ? 1 : 0
+    property real panelScale: 0.82
+    property real panelOpacity: 0.0
+    property bool animating: false
+    property real dropOutMultiplier: root.dropOutHover ? 0.4 : 1.0
     property int memberIndex: -1
     property var memberPreview: null
     property var memberDragKeys: []
@@ -144,12 +147,43 @@ Item {
         root.dropOutHover = false;
     }
 
-    visible: root.progress > 0
+    function finishClose(): void {
+        root.memberPreview = null;
+        root.memberIndex = -1;
+        root.pendingRename = false;
+        root.closed();
+    }
+
+    visible: root.open || root.animating || root.panelOpacity > 0
 
     onOpenChanged: {
         if (root.open) {
             root.shownId = root.folderKey;
             root.memberIndex = root.members.length > 0 ? 0 : -1;
+            closeAnim.stop();
+            if (root.controller.visibilities?.skipLauncherAnim) {
+                root.panelScale = 1.0;
+                root.panelOpacity = 1.0;
+                root.animating = false;
+                if (root.pendingRename) {
+                    root.pendingRename = false;
+                    title.startRename(root.folder?.name ?? "");
+                }
+            } else {
+                root.animating = true;
+                openAnim.restart();
+            }
+        } else {
+            openAnim.stop();
+            if (root.controller.visibilities?.skipLauncherAnim) {
+                root.panelScale = 0.82;
+                root.panelOpacity = 0.0;
+                root.animating = false;
+                root.finishClose();
+            } else {
+                root.animating = true;
+                closeAnim.restart();
+            }
         }
     }
 
@@ -158,23 +192,84 @@ Item {
             root.controller.closeFolder();
     }
 
-    onProgressChanged: {
-        if (root.pendingRename && root.progress > 0) {
-            root.pendingRename = false;
-            title.startRename(root.folder?.name ?? "");
+    ParallelAnimation {
+        id: openAnim
+
+        NumberAnimation {
+            target: root
+            property: "panelScale"
+            from: root.panelScale < 0.82 ? 0.82 : root.panelScale
+            to: 1.0
+            duration: Tokens.anim.durations.expressiveDefaultSpatial
+            easing: Tokens.anim.expressiveDefaultSpatial
         }
-        if (!root.open && root.progress <= 0) {
-            root.memberPreview = null;
-            root.memberIndex = -1;
-            root.pendingRename = false;
-            root.closed();
+
+        NumberAnimation {
+            target: root
+            property: "panelOpacity"
+            from: root.panelOpacity
+            to: 1.0
+            duration: Tokens.anim.durations.expressiveDefaultEffects
+            easing: Tokens.anim.expressiveDefaultEffects
+        }
+
+        onFinished: {
+            root.animating = false;
+            if (root.pendingRename) {
+                root.pendingRename = false;
+                title.startRename(root.folder?.name ?? "");
+            }
         }
     }
 
-    Behavior on progress {
-        enabled: !root.controller.visibilities?.skipLauncherAnim
+    SequentialAnimation {
+        id: closeAnim
 
-        Anim {}
+        NumberAnimation {
+            target: root
+            property: "panelScale"
+            to: 1.025
+            duration: 75
+            easing.type: Easing.OutQuad
+        }
+
+        ParallelAnimation {
+            NumberAnimation {
+                target: root
+                property: "panelScale"
+                to: 0.82
+                duration: 180
+                easing: Tokens.anim.emphasizedAccel
+            }
+
+            NumberAnimation {
+                target: root
+                property: "panelOpacity"
+                to: 0.0
+                duration: 180
+                easing: Tokens.anim.expressiveFastEffects
+            }
+        }
+
+        onFinished: {
+            root.animating = false;
+            root.finishClose();
+        }
+    }
+
+    Behavior on dropOutMultiplier {
+        Anim {
+            type: Anim.FastEffects
+        }
+    }
+
+    Rectangle {
+        id: scrim
+
+        anchors.fill: parent
+        color: "#000000"
+        opacity: 0.3 * root.panelOpacity
+        visible: opacity > 0
     }
 
     MouseArea {
@@ -209,18 +304,21 @@ Item {
         readonly property real targetX: Math.round(Math.max(pad, Math.min(root.width - width - pad, (root.width - width) / 2)))
         readonly property real targetY: Math.round(Math.max(pad, Math.min(root.height - height - pad, (root.height - height) / 2)))
 
-        width: root.columns * root.cellWidth + pad * 2
+        readonly property real anchorCenterX: root.anchorRect.width > 0 ? root.anchorRect.x + root.anchorRect.width / 2 : targetX + width / 2
+        readonly property real anchorCenterY: root.anchorRect.height > 0 ? root.anchorRect.y + root.anchorRect.height / 2 : targetY + height / 2
+
+        width: Math.min(root.width - pad * 2, root.columns * root.cellWidth + pad * 2)
         height: Math.min(root.height - pad * 2, title.height + Tokens.spacing.medium + root.rows * root.cellHeight + pad * 2)
         x: targetX
         y: targetY
         radius: Tokens.rounding.large
         level: 3
-        opacity: root.progress * (root.dropOutHover ? 0.4 : 1)
+        opacity: root.panelOpacity * root.dropOutMultiplier
         transform: Scale {
-            origin.x: width / 2
-            origin.y: height / 2
-            xScale: Math.max(0, root.progress)
-            yScale: Math.max(0, root.progress)
+            origin.x: panel.width / 2 + Math.max(-panel.width * 0.2, Math.min(panel.width * 0.2, (panel.anchorCenterX - (panel.targetX + panel.width / 2)) * 0.25))
+            origin.y: panel.height / 2 + Math.max(-panel.height * 0.2, Math.min(panel.height * 0.2, (panel.anchorCenterY - (panel.targetY + panel.height / 2)) * 0.25))
+            xScale: root.panelScale
+            yScale: root.panelScale
         }
 
         Behavior on width {
@@ -229,12 +327,6 @@ Item {
 
         Behavior on height {
             Anim {}
-        }
-
-        Behavior on opacity {
-            Anim {
-                type: Anim.FastEffects
-            }
         }
 
         StyledRect {
@@ -402,11 +494,15 @@ Item {
         readonly property int row: Math.floor(tile.slot / root.columns)
         readonly property int col: tile.slot % root.columns
 
+        readonly property bool isDragged: root.memberDragKeys.indexOf(tile.appId) !== -1
+
         width: root.tileWidth
         height: root.tileHeight
         x: tile.col * root.cellWidth
         y: tile.row * root.cellHeight
-        z: root.memberDragKeys.indexOf(tile.appId) !== -1 ? 2 : 1
+        z: isDragged ? 2 : 1
+        scale: isDragged ? 0.88 : 1.0
+        opacity: isDragged ? 0.35 : 1.0
 
         Behavior on x {
             Anim {}
@@ -414,6 +510,18 @@ Item {
 
         Behavior on y {
             Anim {}
+        }
+
+        Behavior on scale {
+            Anim {
+                type: Anim.FastSpatial
+            }
+        }
+
+        Behavior on opacity {
+            Anim {
+                type: Anim.FastEffects
+            }
         }
 
         AppTile {
