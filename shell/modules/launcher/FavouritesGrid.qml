@@ -34,6 +34,7 @@ Item {
             flatIndex: slot
             x: root.controller.slotX(slot)
             y: root.controller.slotY(slot)
+            z: entry.isMergeTarget ? 3 : (entry.isDragged ? 0 : 1)
             onDragRequested: (key, x, y) => root.controller.beginDrag(key, entry, x, y)
 
             Behavior on x {

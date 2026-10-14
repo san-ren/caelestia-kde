@@ -19,6 +19,9 @@ Item {
     readonly property bool isFolder: root.modelData.kind === "folder"
     readonly property alias tile: loader.item
 
+    readonly property bool isDragged: root.controller.dragKeys.indexOf(root.key) !== -1
+    readonly property bool isMergeTarget: root.controller.mergeKey === root.key
+
     property int flatIndex: index
 
     signal dragRequested(string key, real x, real y)
@@ -29,7 +32,16 @@ Item {
 
     implicitWidth: root.controller.tileWidth
     implicitHeight: root.controller.tileHeight
-    opacity: root.controller.dragKeys.indexOf(root.key) !== -1 ? 0.4 : 1
+
+    scale: isDragged ? 0.88 : (isMergeTarget ? 1.08 : 1.0)
+    opacity: isDragged ? 0.35 : 1.0
+    z: isMergeTarget ? 3 : (isDragged ? 0 : 1)
+
+    Behavior on scale {
+        Anim {
+            type: Anim.FastSpatial
+        }
+    }
 
     Behavior on opacity {
         Anim {
@@ -41,14 +53,39 @@ Item {
         anchors.fill: parent
         anchors.margins: Tokens.spacing.extraSmall
         radius: Tokens.rounding.large
-        color: Colours.palette.m3primary
-        opacity: root.controller.mergeKey === root.key ? 0.18 : 0
-        border.width: root.controller.mergeKey === root.key ? 2 : 0
-        border.color: Colours.palette.m3primary
+        color: Qt.alpha(Colours.palette.m3surfaceContainerHighest, 0.25)
+        border.width: 1
+        border.color: Qt.alpha(Colours.palette.m3outline, 0.4)
+        opacity: root.isDragged ? 1 : 0
 
         Behavior on opacity {
             Anim {
                 type: Anim.FastEffects
+            }
+        }
+    }
+
+    StyledRect {
+        id: mergeHalo
+
+        anchors.fill: parent
+        anchors.margins: Tokens.spacing.extraSmall
+        radius: Tokens.rounding.large
+        color: Qt.alpha(Colours.palette.m3primaryContainer, 0.5)
+        border.width: 2
+        border.color: Colours.palette.m3primary
+        opacity: root.isMergeTarget ? 1 : 0
+        scale: root.isMergeTarget ? 1.0 : 0.88
+
+        Behavior on opacity {
+            Anim {
+                type: Anim.FastEffects
+            }
+        }
+
+        Behavior on scale {
+            Anim {
+                type: Anim.FastSpatial
             }
         }
     }
@@ -58,6 +95,38 @@ Item {
 
         anchors.fill: parent
         sourceComponent: root.isFolder ? folderComponent : appComponent
+    }
+
+    StyledRect {
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.topMargin: Tokens.spacing.extraSmall
+        anchors.rightMargin: Tokens.spacing.extraSmall
+        width: 22
+        height: 22
+        radius: Tokens.rounding.full
+        color: Colours.palette.m3primary
+        opacity: root.isMergeTarget ? 1 : 0
+        scale: root.isMergeTarget ? 1.0 : 0.4
+
+        Behavior on opacity {
+            Anim {
+                type: Anim.FastEffects
+            }
+        }
+
+        Behavior on scale {
+            Anim {
+                type: Anim.FastSpatial
+            }
+        }
+
+        MaterialIcon {
+            anchors.centerIn: parent
+            text: root.isFolder ? "add" : "create_new_folder"
+            fontStyle: Tokens.font.icon.small
+            color: Colours.palette.m3onPrimary
+        }
     }
 
     Component {
@@ -81,6 +150,7 @@ Item {
             members: root.modelData.members
             selected: root.selected
             draggable: true
+            mergeTarget: root.isMergeTarget
             onDragRequested: (x, y) => root.dragRequested(root.key, x, y)
             onActivated: root.controller.openFolder(root.key, root)
             onContextMenuRequested: (x, y) => root.controller.openFolderContextMenu(root.key, root)

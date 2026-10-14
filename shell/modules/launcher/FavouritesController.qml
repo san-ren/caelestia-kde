@@ -28,6 +28,7 @@ Item {
     property string dragAnchor: ""
     property var previewKeys: null
     property string mergeKey: ""
+    property string pendingMergeKey: ""
     property string dragImageKey: ""
     property string folderKey: ""
     property rect folderAnchor: Qt.rect(0, 0, 0, 0)
@@ -161,11 +162,31 @@ Item {
             return;
         const fromEntry = root.entries.find(f => f.key === fromKey);
         const toEntry = root.entries.find(f => f.key === toKey);
-        if (fromEntry && toEntry && fromEntry.kind === "app" && wrapper.overIcon(drag.x, drag.y)) {
-            root.mergeKey = toKey;
+        const canMerge = fromEntry && toEntry && fromEntry.kind === "app";
+
+        if (canMerge && wrapper.overIcon(drag.x, drag.y)) {
+            if (toEntry.kind === "folder") {
+                mergeTimer.stop();
+                root.pendingMergeKey = toKey;
+                root.mergeKey = toKey;
+                return;
+            }
+            if (root.mergeKey === toKey)
+                return;
+            if (root.pendingMergeKey !== toKey) {
+                root.pendingMergeKey = toKey;
+                mergeTimer.restart();
+            }
             return;
         }
-        root.mergeKey = "";
+
+        if (root.pendingMergeKey === toKey) {
+            mergeTimer.stop();
+            root.pendingMergeKey = "";
+        }
+        if (root.mergeKey === toKey)
+            root.mergeKey = "";
+
         const keys = root.entries.map(f => f.key);
         const from = keys.indexOf(fromKey);
         const to = keys.indexOf(toKey);
@@ -181,11 +202,17 @@ Item {
     }
 
     function dragExit(wrapper: var): void {
+        if (root.pendingMergeKey === wrapper.key) {
+            mergeTimer.stop();
+            root.pendingMergeKey = "";
+        }
         if (root.mergeKey === wrapper.key)
             root.mergeKey = "";
     }
 
     function dragBackground(): void {
+        mergeTimer.stop();
+        root.pendingMergeKey = "";
         root.mergeKey = "";
         root.previewKeys = null;
     }
@@ -200,15 +227,18 @@ Item {
             root.endDrag();
             return;
         }
-        if (root.mergeKey === toKey) {
-            const fromEntry = root.entries.find(f => f.key === fromKey);
-            const toEntry = root.entries.find(f => f.key === toKey);
-            if (fromEntry && fromEntry.kind === "app" && toEntry && toEntry.kind === "app") {
+        const fromEntry = root.entries.find(f => f.key === fromKey);
+        const toEntry = root.entries.find(f => f.key === toKey);
+        const canMerge = fromEntry && toEntry && fromEntry.kind === "app";
+        const isMerge = canMerge && (root.mergeKey === toKey || root.pendingMergeKey === toKey || wrapper.overIcon(drop.x, drop.y));
+
+        if (isMerge) {
+            if (toEntry.kind === "app") {
                 LauncherFavourites.makeFolder([fromKey], toKey);
                 root.endDrag();
                 return;
             }
-            if (fromEntry && fromEntry.kind === "app" && toEntry && toEntry.kind === "folder") {
+            if (toEntry.kind === "folder") {
                 LauncherFavourites.addToFolder(fromKey, toKey);
                 root.endDrag();
                 return;
@@ -221,6 +251,8 @@ Item {
 
     function endDrag(): void {
         dragWatchdog.stop();
+        mergeTimer.stop();
+        root.pendingMergeKey = "";
         dragSource.Drag.active = false;
         root.dragImageKey = "";
         root.dragKeys = [];
@@ -267,6 +299,16 @@ Item {
         onTriggered: {
             if (root.dragKeys.length > 0 && !dragSource.Drag.active)
                 root.endDrag();
+        }
+    }
+
+    Timer {
+        id: mergeTimer
+
+        interval: 180
+        onTriggered: {
+            if (root.pendingMergeKey.length > 0)
+                root.mergeKey = root.pendingMergeKey;
         }
     }
 

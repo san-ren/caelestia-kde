@@ -14,6 +14,7 @@ Item {
     property var members: []
     property bool selected: false
     property bool draggable: false
+    property bool mergeTarget: false
 
     signal activated()
     signal dragRequested(real x, real y)
@@ -65,7 +66,26 @@ Item {
             implicitWidth: Math.round(root.implicitWidth * 0.52)
             implicitHeight: implicitWidth
             radius: Tokens.rounding.large
-            color: Qt.alpha(Colours.palette.m3surfaceContainerHighest, 0.85)
+            color: root.mergeTarget ? Qt.alpha(Colours.palette.m3primaryContainer, 0.9) : Qt.alpha(Colours.palette.m3surfaceContainerHighest, 0.85)
+            scale: root.mergeTarget ? 1.10 : 1.0
+            border.width: root.mergeTarget ? 2 : 0
+            border.color: Colours.palette.m3primary
+
+            Behavior on scale {
+                Anim {
+                    type: Anim.FastSpatial
+                }
+            }
+
+            Behavior on color {
+                CAnim {}
+            }
+
+            Behavior on border.width {
+                Anim {
+                    type: Anim.FastEffects
+                }
+            }
 
             Grid {
                 anchors.centerIn: parent
