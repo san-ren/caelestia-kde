@@ -288,11 +288,11 @@ StyledRect {
                 icon: "tune"
                 type: IconButton.Text
                 onClicked: {
-                    const pageIdx = PageDictionary.pages.findIndex(p => p.key === "utilities");
+                    const pageIdx = PageDictionary.pages.findIndex(p => p.key === "panels");
                     root.visibilities.utilities = false;
                     execTimer.pendingAction = () => WindowFactory.create(null, {
                         initialPageIdx: pageIdx,
-                        initialSubPageIdx: 5
+                        initialSubPageIdx: PageDictionary.subPageIdxFor("panels/UtilitiesPanel.qml")
                     });
                     execTimer.restart();
                 }

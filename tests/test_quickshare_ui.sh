@@ -8,7 +8,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SHELL_DIR="$REPO_ROOT/shell"
 SWITCH="$SHELL_DIR/services/QuickShare.qml"
 SETUP="$SHELL_DIR/services/QuickShareSetup.qml"
-PAGE="$SHELL_DIR/modules/nexus/pages/services/QuickSharePage.qml"
+PAGE="$SHELL_DIR/modules/nexus/pages/panels/QuickToggleSettings.qml"
 CARD="$SHELL_DIR/modules/utilities/cards/Toggles.qml"
 
 test_the_switch_state_has_one_home() {

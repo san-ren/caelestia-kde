@@ -113,12 +113,7 @@ QtObject {
         Component {
             StackPage {
                 SubPage { slot: 0; key: "utilities"; Component { UtilitiesPage {} } }
-                SubPage { slot: 1; key: "gameMode"; Component { GameModePage {} } }
-                SubPage { slot: 2; key: "gameModeTargets"; Component { GameModeTargetsPage {} } }
-                SubPage { slot: 3; key: "osd"; Component { OsdPage {} } }
-                SubPage { slot: 4; key: "utilitiesPanelPage"; Component { UtilitiesPanelPage {} } }
-                SubPage { slot: 5; key: "quickToggles"; Component { QuickTogglesPage {} } }
-                SubPage { slot: 6; key: "quickShare"; Component { QuickSharePage {} } }
+                SubPage { slot: 1; key: "osd"; Component { OsdPage {} } }
             }
         },
         Component {

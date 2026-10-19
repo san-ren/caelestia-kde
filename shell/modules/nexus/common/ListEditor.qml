@@ -19,10 +19,14 @@ ListView {
     property bool allowToggle: true
     // A control that sits between the label and the switch, e.g. a per-row menu.
     property Component trailingComponent
+    property bool allowReorder: true
+    property var settingsFor: null
+    property string expandedId: ""
 
     signal itemMoved(from: int, to: int)
     signal itemRemoved(index: int)
     signal itemToggled(index: int, checked: bool)
+    signal settingsToggled(itemId: string)
 
     function labelFor(item: var): string {
         return item.label;
@@ -42,6 +46,10 @@ ListView {
 
     function dampOvershoot(overshoot: real, maxOvershoot: real): real {
         return overshoot / (1 + overshoot / maxOvershoot);
+    }
+
+    function idFor(item: var): string {
+        return item && item.id !== undefined ? item.id : String(item);
     }
 
     Layout.fillWidth: true
@@ -115,6 +123,10 @@ ListView {
         property real topRadius: root?.first && DelegateModel.itemsIndex === 0 ? Tokens.rounding.extraLarge : Tokens.rounding.extraSmall
         property real radiusLerpProg
 
+        readonly property Component settingsComp: root.settingsFor ? root.settingsFor(item.modelData) : null
+        readonly property bool settingsOpen: !!settingsComp && root.expandedId === root.idFor(item.modelData)
+        readonly property real dragExtent: header.y + header.height + row.anchors.bottomMargin
+
         function lerpRadius(a: real, b: real): real {
             return a + (b - a) * radiusLerpProg;
         }
@@ -169,7 +181,11 @@ ListView {
         MouseArea {
             id: mouse
 
-            anchors.fill: parent
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            height: item.dragExtent
+            enabled: root.allowReorder
             preventStealing: true
 
             onPressed: e => {
@@ -264,13 +280,28 @@ ListView {
                 topRightRadius: item.lerpRadius(item.topRadius, Tokens.rounding.large)
             }
 
+            StyledRect {
+                anchors.fill: parent
+                radius: itemBg.radius
+                topLeftRadius: itemBg.topLeftRadius
+                topRightRadius: itemBg.topRightRadius
+                color: "black"
+                opacity: item.settingsOpen ? 0.16 : 0
+
+                Behavior on opacity {
+                    Anim {
+                        type: Anim.DefaultEffects
+                    }
+                }
+            }
+
             MouseArea {
                 id: stateLayer
 
                 anchors.fill: parent
                 acceptedButtons: Qt.NoButton
                 hoverEnabled: true
-                cursorShape: mouse.pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+                cursorShape: !root.allowReorder ? Qt.ArrowCursor : mouse.pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
 
                 StyledRect {
                     anchors.fill: parent
@@ -288,92 +319,144 @@ ListView {
                 }
             }
 
-            RowLayout {
+            ColumnLayout {
                 id: row
 
-                anchors.fill: parent
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
                 anchors.margins: Tokens.padding.medium
                 anchors.leftMargin: Tokens.padding.largeIncreased
                 anchors.rightMargin: Tokens.padding.large
+                spacing: Tokens.spacing.small
 
-                spacing: Tokens.spacing.medium
+                RowLayout {
+                    id: header
 
-                MaterialIcon {
-                    id: dragIcon
-
-                    text: "drag_indicator"
-                    color: Qt.alpha(Colours.palette.m3onSurfaceVariant, root.allowToggle && !enabledSwitch.checked ? 0.5 : 1)
-                    fontStyle: Tokens.font.icon.medium
-                }
-
-                IconImage {
-                    id: rowIcon
-
-                    readonly property string iconSource: root.iconFor(item.modelData)
-
-                    visible: iconSource !== ""
-                    Layout.alignment: Qt.AlignVCenter
-                    implicitSize: Tokens.font.icon.large.pointSize * 1.5
-                    source: iconSource
-                }
-
-                ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 0
+                    spacing: Tokens.spacing.medium
 
-                    StyledText {
-                        id: label
+                    MaterialIcon {
+                        id: dragIcon
 
-                        Layout.fillWidth: true
-                        text: root.labelFor(item.modelData)
-                        color: Qt.alpha(Colours.palette.m3onSurface, root.allowToggle && !enabledSwitch.checked ? 0.5 : 1)
-                        elide: Text.ElideRight
-                    }
-
-                    StyledText {
-                        id: subtext
-
-                        readonly property string value: root.subtextFor(item.modelData)
-
-                        Layout.fillWidth: true
-                        visible: value !== ""
-                        text: value
+                        visible: root.allowReorder
+                        text: "drag_indicator"
                         color: Qt.alpha(Colours.palette.m3onSurfaceVariant, root.allowToggle && !enabledSwitch.checked ? 0.5 : 1)
-                        font: NexusStyle.secondaryFont
-                        elide: Text.ElideRight
+                        fontStyle: Tokens.font.icon.medium
+                    }
+
+                    IconImage {
+                        id: rowIcon
+
+                        readonly property string iconSource: root.iconFor(item.modelData)
+
+                        visible: iconSource !== ""
+                        Layout.alignment: Qt.AlignVCenter
+                        implicitSize: Tokens.font.icon.large.pointSize * 1.5
+                        source: iconSource
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+
+                        StyledText {
+                            id: label
+
+                            Layout.fillWidth: true
+                            text: root.labelFor(item.modelData)
+                            color: Qt.alpha(Colours.palette.m3onSurface, root.allowToggle && !enabledSwitch.checked ? 0.5 : 1)
+                            elide: Text.ElideRight
+                        }
+
+                        StyledText {
+                            id: subtext
+
+                            readonly property string value: root.subtextFor(item.modelData)
+
+                            Layout.fillWidth: true
+                            visible: value !== ""
+                            text: value
+                            color: Qt.alpha(Colours.palette.m3onSurfaceVariant, root.allowToggle && !enabledSwitch.checked ? 0.5 : 1)
+                            font: NexusStyle.secondaryFont
+                            elide: Text.ElideRight
+                        }
+                    }
+
+                    IconButton {
+                        visible: !!item.settingsComp
+                        type: IconButton.Text
+                        isRound: true
+                        icon: item.settingsOpen ? "expand_less" : "tune"
+                        font: Tokens.font.icon.medium
+
+                        onClicked: root.settingsToggled(root.idFor(item.modelData))
+                    }
+
+                    Loader {
+                        id: trailingLoader
+
+                        sourceComponent: root.trailingComponent
+
+                        onLoaded: {
+                            trailingLoader.item.modelData = Qt.binding(() => item.modelData);
+                            trailingLoader.item.isLast = Qt.binding(() => item.DelegateModel.itemsIndex === root.count - 1);
+                        }
+                    }
+
+                    StyledSwitch {
+                        id: enabledSwitch
+
+                        visible: root.allowToggle
+                        checked: root.toggledFor(item.modelData)
+                        font: Tokens.font.icon.medium
+                        onToggled: root.itemToggled(item.DelegateModel.itemsIndex, checked)
+                    }
+
+                    IconButton {
+                        visible: root.allowRemove
+                        type: IconButton.Text
+                        isRound: true
+                        icon: "delete"
+                        inactiveOnColour: Colours.palette.m3error
+                        font: Tokens.font.icon.medium
+                        label.fill: 0
+
+                        onClicked: root.itemRemoved(item.DelegateModel.itemsIndex)
                     }
                 }
 
-                Loader {
-                    id: trailingLoader
+                Item {
+                    id: settingsHolder
 
-                    sourceComponent: root.trailingComponent
+                    property real targetHeight: item.settingsOpen ? settingsLoader.implicitHeight : 0
 
-                    onLoaded: {
-                        trailingLoader.item.modelData = Qt.binding(() => item.modelData);
-                        trailingLoader.item.isLast = Qt.binding(() => item.DelegateModel.itemsIndex === root.count - 1);
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: targetHeight
+                    visible: targetHeight > 0
+                    clip: true
+
+                    Behavior on targetHeight {
+                        Anim {
+                            type: Anim.DefaultSpatial
+                        }
                     }
-                }
 
-                StyledSwitch {
-                    id: enabledSwitch
+                    Loader {
+                        id: settingsLoader
 
-                    visible: root.allowToggle
-                    checked: root.toggledFor(item.modelData)
-                    font: Tokens.font.icon.medium
-                    onToggled: root.itemToggled(item.DelegateModel.itemsIndex, checked)
-                }
+                        width: settingsHolder.width
+                        active: item.settingsOpen || settingsHolder.targetHeight > 0
+                        enabled: enabledSwitch.checked
+                        opacity: item.settingsOpen ? (enabledSwitch.checked ? 1 : 0.45) : 0
+                        sourceComponent: item.settingsComp
 
-                IconButton {
-                    visible: root.allowRemove
-                    type: IconButton.Text
-                    isRound: true
-                    icon: "delete"
-                    inactiveOnColour: Colours.palette.m3error
-                    font: Tokens.font.icon.medium
-                    label.fill: 0
-
-                    onClicked: root.itemRemoved(item.DelegateModel.itemsIndex)
+                        Behavior on opacity {
+                            Anim {
+                                type: Anim.DefaultEffects
+                            }
+                        }
+                    }
                 }
             }
         }
