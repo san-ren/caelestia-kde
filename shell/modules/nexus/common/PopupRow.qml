@@ -19,6 +19,7 @@ ConnectedRect {
 
     Layout.fillWidth: true
     implicitHeight: navLayout.implicitHeight + navLayout.anchors.margins * 2
+    z: popup.open || popup.animDriver > 0 ? 2 : 0
 
     StateLayer {
         id: stateLayer
