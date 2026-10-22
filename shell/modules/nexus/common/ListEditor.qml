@@ -125,7 +125,6 @@ ListView {
 
         readonly property Component settingsComp: root.settingsFor ? root.settingsFor(item.modelData) : null
         readonly property bool settingsOpen: !!settingsComp && root.expandedId === root.idFor(item.modelData)
-        readonly property real dragExtent: header.y + header.height + row.anchors.bottomMargin
 
         function lerpRadius(a: real, b: real): real {
             return a + (b - a) * radiusLerpProg;
@@ -181,10 +180,7 @@ ListView {
         MouseArea {
             id: mouse
 
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.top: parent.top
-            height: item.dragExtent
+            anchors.fill: parent
             enabled: root.allowReorder
             preventStealing: true
 
@@ -222,14 +218,19 @@ ListView {
 
             onPositionChanged: e => {
                 item.lastMoveY = item.y;
-                const absY = item.mapToItem(root.contentItem, 0, e.y).y;
 
-                const swap = root.itemAt(0, absY);
+                const pointerY = item.mapToItem(root.contentItem, 0, e.y).y;
+
+                const swap = root.itemAt(0, pointerY);
                 if (!swap || swap === item)
                     return;
 
+                const swapMid = swap.mapToItem(root.contentItem, 0, 0).y + swap.height / 2;
                 const idx = item.DelegateModel.itemsIndex;
                 const swapIdx = swap.DelegateModel.itemsIndex;
+                if (idx < swapIdx ? pointerY < swapMid : pointerY > swapMid)
+                    return;
+
                 visualModel.items.move(idx, swapIdx);
             }
 
