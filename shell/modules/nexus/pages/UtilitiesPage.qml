@@ -16,11 +16,6 @@ PageBase {
         width: root.cappedWidth
         spacing: Tokens.spacing.extraSmall / 2
 
-        SectionHeader {
-            first: true
-            text: qsTr("Quick controls")
-        }
-
         NavRow {
             first: true
             last: true

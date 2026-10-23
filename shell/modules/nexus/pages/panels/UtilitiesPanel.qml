@@ -242,7 +242,6 @@ PageBase {
                 last: true
                 text: qsTr("Custom order")
                 subtext: qsTr("Rearrange toggles with drag handles")
-                // Custom reset: the row reads a local property, default is off
                 reset: ({
                         customGet: () => Config.utilities.quickTogglesCustomOrder ?? false,
                         customSet: v => {
