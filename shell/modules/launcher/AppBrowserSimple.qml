@@ -257,6 +257,7 @@ Item {
         areaWidth: grid.width
         currentIndex: root.currentIndex
         visibilities: root.visibilities
+        gridItem: favGrid
         onLaunchRequested: app => root.launch(app)
     }
 

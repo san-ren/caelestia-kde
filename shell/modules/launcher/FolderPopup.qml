@@ -130,8 +130,9 @@ Item {
         root.endMemberDrag();
     }
 
-    function moveOut(): void {
-        LauncherFavourites.moveOut(root.folderId, root.memberDragAnchor, LauncherFavourites.entries.length);
+    function moveOut(toSlot: int): void {
+        const slot = toSlot >= 0 ? toSlot : root.controller.entries.length;
+        LauncherFavourites.moveOut(root.folderId, root.memberDragAnchor, slot);
         const stillFolder = LauncherFavourites.folderById(root.folderId);
         root.endMemberDrag();
         if (!stillFolder)
@@ -195,6 +196,14 @@ Item {
     ParallelAnimation {
         id: openAnim
 
+        onFinished: {
+            root.animating = false;
+            if (root.pendingRename) {
+                root.pendingRename = false;
+                title.startRename(root.folder?.name ?? "");
+            }
+        }
+
         NumberAnimation {
             target: root
             property: "panelScale"
@@ -212,18 +221,15 @@ Item {
             duration: Tokens.anim.durations.expressiveDefaultEffects
             easing: Tokens.anim.expressiveDefaultEffects
         }
-
-        onFinished: {
-            root.animating = false;
-            if (root.pendingRename) {
-                root.pendingRename = false;
-                title.startRename(root.folder?.name ?? "");
-            }
-        }
     }
 
     SequentialAnimation {
         id: closeAnim
+
+        onFinished: {
+            root.animating = false;
+            root.finishClose();
+        }
 
         NumberAnimation {
             target: root
@@ -249,11 +255,6 @@ Item {
                 duration: 180
                 easing: Tokens.anim.expressiveFastEffects
             }
-        }
-
-        onFinished: {
-            root.animating = false;
-            root.finishClose();
         }
     }
 
@@ -292,7 +293,7 @@ Item {
             if (!root.isInternal(drop))
                 return;
             drop.accept(Qt.MoveAction);
-            root.moveOut();
+            root.controller.dropOutMember(root, drop.x, drop.y);
         }
     }
 

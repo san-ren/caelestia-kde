@@ -183,11 +183,11 @@ Singleton {
         const next = entries.slice();
         if (remaining.length >= 2) {
             next[folderIndex] = Object.assign({}, folder, { apps: remaining });
-            next.splice(toIndex, 0, { kind: "app", id: key });
         } else {
             next.splice(folderIndex, 1, ...remaining.map(a => ({ kind: "app", id: a })));
-            next.splice(toIndex, 0, { kind: "app", id: key });
         }
+        const shifted = remaining.length === 0 && toIndex > folderIndex ? toIndex - 1 : toIndex;
+        next.splice(Math.max(0, Math.min(shifted, next.length)), 0, { kind: "app", id: key });
         setEntries(next);
     }
 

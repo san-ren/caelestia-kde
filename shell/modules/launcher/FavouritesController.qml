@@ -24,6 +24,7 @@ Item {
 
     property var entries: []
     property var otherApps: []
+    property Item gridItem: null
     property var dragKeys: []
     property string dragAnchor: ""
     property var previewKeys: null
@@ -64,6 +65,26 @@ Item {
 
     function slotY(slot: int): real {
         return Math.floor(Math.max(0, slot) / root.columns) * root.cellHeight;
+    }
+
+    function insertIndexAt(sourceItem: Item, x: real, y: real): int {
+        if (!root.gridItem || !sourceItem)
+            return -1;
+        const p = root.gridItem.mapFromItem(sourceItem, x, y);
+        if (p.x < 0 || p.y < 0)
+            return -1;
+        const col = Math.floor(p.x / root.cellWidth);
+        const row = Math.floor(p.y / root.cellHeight);
+        if (col < 0 || col >= root.columns)
+            return -1;
+        const slot = row * root.columns + col;
+        if (slot > root.displayEntries.length)
+            return -1;
+        return slot + ((p.x - col * root.cellWidth) > root.cellWidth / 2 ? 1 : 0);
+    }
+
+    function dropOutMember(sourceItem: Item, x: real, y: real): void {
+        folderPopup.moveOut(root.insertIndexAt(sourceItem, x, y));
     }
 
     function sameEntries(a: var, b: var): bool {

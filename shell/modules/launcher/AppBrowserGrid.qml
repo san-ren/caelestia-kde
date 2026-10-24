@@ -344,6 +344,7 @@ Item {
         currentIndex: root.favouriteIndex
         stretchTiles: false
         visibilities: root.visibilities
+        gridItem: favouriteGrid
         onLaunchRequested: app => root.launch(app)
     }
 }
